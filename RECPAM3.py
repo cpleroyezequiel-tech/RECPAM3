@@ -39,28 +39,23 @@ with col_conf1:
     mes_inicio_num = meses_nombres.index(mes_inicio_nombre) + 1
 
 with col_conf2:
-    # Capturamos entrada y forzamos que solo sean números y máximo 6 dígitos
     raw_input = st.text_input("Reexpresar a moneda de (AAAAMM):", value="202412", max_chars=6)
-    
-    # Lógica para poner la barra automáticamente
     if len(raw_input) == 6 and raw_input.isdigit():
         mes_destino_input = f"{raw_input[:4]}/{raw_input[4:]}"
     else:
-        mes_destino_input = raw_input # Mantener igual para validación de error
+        mes_destino_input = raw_input
 
 st.divider()
 
 data_pegada = st.text_area("Pegue las 3 columnas aquí (Año-Mes, Compras, Ventas):", height=200)
 
 if data_pegada:
-    # VALIDACIÓN PERSONALIZADA
     if len(raw_input) < 6:
         st.warning("Por favor, complete el periodo con 6 dígitos (ejemplo: 202412).")
     elif mes_destino_input not in indices_base:
         st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2025/11.")
     else:
         try:
-            # 4. PROCESAMIENTO DE DATOS
             df = pd.read_csv(io.StringIO(data_pegada), sep='\t')
             df.columns = ['Periodo_Raw', 'Compras_H', 'Venta_H_Raw']
             
@@ -73,16 +68,42 @@ if data_pegada:
 
             df['Periodo'] = df['Periodo_Raw'].apply(normalizar_periodo)
 
+            # --- NUEVA FUNCION DE LIMPIEZA DE MONTO ---
             def limpiar_monto(val):
                 val = str(val).strip().upper()
                 if val in ["S/D", "NAN", ""]: return np.nan
-                val = val.replace('.', '').replace(',', '.')
+                
+                # Quitar símbolo peso si existe
+                val = val.replace('$', '').replace(' ', '')
+                
+                # Caso A: Tiene puntos y comas (ej: 1.234,56 o 1,234.56)
+                if '.' in val and ',' in val:
+                    if val.rfind('.') < val.rfind(','): # Punto es mil, coma es decimal
+                        val = val.replace('.', '').replace(',', '.')
+                    else: # Coma es mil, punto es decimal
+                        val = val.replace(',', '')
+                
+                # Caso B: Solo tiene comas (ej: 23,397,451)
+                elif ',' in val:
+                    # Si hay más de una coma, o si hay exactamente 3 dígitos después de la coma
+                    # asumimos que es un separador de miles.
+                    if val.count(',') > 1 or len(val.split(',')[-1]) == 3:
+                        val = val.replace(',', '')
+                    else:
+                        val = val.replace(',', '.')
+                
+                # Caso C: Solo tiene puntos (ej: 23.397.451)
+                elif '.' in val:
+                    # Si hay más de un punto, o si hay exactamente 3 dígitos después del punto
+                    if val.count('.') > 1 or len(val.split('.')[-1]) == 3:
+                        val = val.replace('.', '')
+                
                 try: return float(val)
                 except: return np.nan
 
             df['Venta_H'] = df['Venta_H_Raw'].apply(limpiar_monto)
 
-            # Filtrado
+            # Filtrado y Cálculo
             lista_periodos = sorted(list(indices_base.keys()))
             idx_corte = lista_periodos.index(mes_destino_input)
             periodos_validos = lista_periodos[:idx_corte + 1]
@@ -140,7 +161,6 @@ if data_pegada:
                 matriz_analisis.loc['TOTAL EJERCICIO'] = totales
                 matriz_analisis.loc['PROMEDIO MENSUAL'] = promedios
 
-                # Formatos de visualización
                 def format_contable_pct(val):
                     if pd.isna(val) or val == 0: return "-"
                     v = int(round(val))
@@ -170,7 +190,6 @@ if data_pegada:
                 formatos_pantalla = {col: (format_contable_pct if "Var %" in col else format_valor) for col in matriz_analisis.columns}
                 st.dataframe(styler.format(formatos_pantalla), use_container_width=True, height=550)
 
-                # Excel
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     matriz_analisis.to_excel(writer, sheet_name='Reporte_Ventas')
@@ -184,4 +203,3 @@ if data_pegada:
 
         except Exception as e:
             st.error(f"Error al procesar: {e}")
-
