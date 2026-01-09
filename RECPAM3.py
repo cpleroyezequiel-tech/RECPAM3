@@ -68,42 +68,28 @@ if data_pegada:
 
             df['Periodo'] = df['Periodo_Raw'].apply(normalizar_periodo)
 
-            # --- NUEVA FUNCION DE LIMPIEZA DE MONTO ---
             def limpiar_monto(val):
                 val = str(val).strip().upper()
                 if val in ["S/D", "NAN", ""]: return np.nan
-                
-                # Quitar símbolo peso si existe
                 val = val.replace('$', '').replace(' ', '')
-                
-                # Caso A: Tiene puntos y comas (ej: 1.234,56 o 1,234.56)
                 if '.' in val and ',' in val:
-                    if val.rfind('.') < val.rfind(','): # Punto es mil, coma es decimal
+                    if val.rfind('.') < val.rfind(','):
                         val = val.replace('.', '').replace(',', '.')
-                    else: # Coma es mil, punto es decimal
+                    else:
                         val = val.replace(',', '')
-                
-                # Caso B: Solo tiene comas (ej: 23,397,451)
                 elif ',' in val:
-                    # Si hay más de una coma, o si hay exactamente 3 dígitos después de la coma
-                    # asumimos que es un separador de miles.
                     if val.count(',') > 1 or len(val.split(',')[-1]) == 3:
                         val = val.replace(',', '')
                     else:
                         val = val.replace(',', '.')
-                
-                # Caso C: Solo tiene puntos (ej: 23.397.451)
                 elif '.' in val:
-                    # Si hay más de un punto, o si hay exactamente 3 dígitos después del punto
                     if val.count('.') > 1 or len(val.split('.')[-1]) == 3:
                         val = val.replace('.', '')
-                
                 try: return float(val)
                 except: return np.nan
 
             df['Venta_H'] = df['Venta_H_Raw'].apply(limpiar_monto)
 
-            # Filtrado y Cálculo
             lista_periodos = sorted(list(indices_base.keys()))
             idx_corte = lista_periodos.index(mes_destino_input)
             periodos_validos = lista_periodos[:idx_corte + 1]
@@ -111,13 +97,11 @@ if data_pegada:
 
             if not df.empty:
                 ind_dest = indices_base[mes_destino_input]
-                
                 df['Venta_R'] = df.apply(
                     lambda row: row['Venta_H'] * (ind_dest / indices_base[row['Periodo']]) 
                     if pd.notnull(row['Venta_H']) and row['Periodo'] in indices_base else np.nan, 
                     axis=1
                 )
-                
                 df['Fecha'] = pd.to_datetime(df['Periodo'], format='%Y/%m')
                 
                 def calcular_nombre_ejercicio(row):
@@ -133,7 +117,9 @@ if data_pegada:
                     m = (mes_inicio_num + i - 1) % 12
                     orden_meses.append(f"{m+1:02d}. {meses_nombres[m]}")
 
-                matriz = df.pivot_table(index='Mes_Etiqueta', columns='Ejercicio', values='Venta_R', aggfunc='sum', dropna=False)
+                # --- FIX PROMEDIO: Usamos una funcion que no convierta NAs en 0 ---
+                matriz = df.pivot_table(index='Mes_Etiqueta', columns='Ejercicio', values='Venta_R', 
+                                        aggfunc=lambda x: x.sum(min_count=1), dropna=False)
                 matriz = matriz.reindex(orden_meses)
 
                 ejercicios_disponibles = sorted(matriz.columns)
@@ -146,6 +132,7 @@ if data_pegada:
                         nombre_var = "Var %" + (" " * i) 
                         matriz_analisis[nombre_var] = ((matriz[ej_actual] / matriz[ej_previo]) - 1) * 100
 
+                # Calculos de Totales y Promedios (omitira los S/D automáticamente)
                 totales = matriz_analisis.sum(axis=0, skipna=True)
                 promedios = matriz_analisis.mean(axis=0, skipna=True)
                 
@@ -161,6 +148,7 @@ if data_pegada:
                 matriz_analisis.loc['TOTAL EJERCICIO'] = totales
                 matriz_analisis.loc['PROMEDIO MENSUAL'] = promedios
 
+                # Formatos
                 def format_contable_pct(val):
                     if pd.isna(val) or val == 0: return "-"
                     v = int(round(val))
@@ -177,29 +165,23 @@ if data_pegada:
                     return ''
 
                 st.subheader(f"✅ Cuadro Comparativo (Moneda de Cierre: {mes_destino_input})")
-                
                 styler = matriz_analisis.style.apply(
                     lambda s: ['font-weight: bold; background-color: #e8f4f8' if s.name == 'TOTAL EJERCICIO' else '' for _ in s], axis=1
                 ).apply(
                     lambda s: ['font-style: italic; background-color: #f9f9f9' if s.name == 'PROMEDIO MENSUAL' else '' for _ in s], axis=1
                 )
-
                 columnas_var = [c for c in matriz_analisis.columns if "Var %" in c]
                 styler = styler.map(color_variacion, subset=columnas_var)
-
                 formatos_pantalla = {col: (format_contable_pct if "Var %" in col else format_valor) for col in matriz_analisis.columns}
                 st.dataframe(styler.format(formatos_pantalla), use_container_width=True, height=550)
 
+                # Boton Excel
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     matriz_analisis.to_excel(writer, sheet_name='Reporte_Ventas')
-                
-                st.download_button(
-                    label="📥 Descargar Reporte en Excel",
-                    data=output.getvalue(),
-                    file_name=f"Analisis_Ventas_{mes_destino_input.replace('/','-')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                st.download_button(label="📥 Descargar Reporte en Excel", data=output.getvalue(), 
+                                   file_name=f"Analisis_Ventas_{mes_destino_input.replace('/','-')}.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
         except Exception as e:
             st.error(f"Error al procesar: {e}")
