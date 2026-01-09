@@ -117,7 +117,7 @@ if data_pegada:
                     m = (mes_inicio_num + i - 1) % 12
                     orden_meses.append(f"{m+1:02d}. {meses_nombres[m]}")
 
-                # --- FIX PROMEDIO: Usamos una funcion que no convierta NAs en 0 ---
+                # Creamos la matriz base solo con los años
                 matriz = df.pivot_table(index='Mes_Etiqueta', columns='Ejercicio', values='Venta_R', 
                                         aggfunc=lambda x: x.sum(min_count=1), dropna=False)
                 matriz = matriz.reindex(orden_meses)
@@ -125,6 +125,7 @@ if data_pegada:
                 ejercicios_disponibles = sorted(matriz.columns)
                 matriz_analisis = pd.DataFrame(index=matriz.index)
 
+                # Construimos la tabla final intercalando Var%
                 for i, ej_actual in enumerate(ejercicios_disponibles):
                     matriz_analisis[ej_actual] = matriz[ej_actual]
                     if i > 0:
@@ -132,23 +133,40 @@ if data_pegada:
                         nombre_var = "Var %" + (" " * i) 
                         matriz_analisis[nombre_var] = ((matriz[ej_actual] / matriz[ej_previo]) - 1) * 100
 
-                # Calculos de Totales y Promedios (omitira los S/D automáticamente)
-                totales = matriz_analisis.sum(axis=0, skipna=True)
-                promedios = matriz_analisis.mean(axis=0, skipna=True)
-                
-                cols = list(matriz_analisis.columns)
-                for i, col in enumerate(cols):
-                    if "Var %" in col and i >= 2:
-                        e_actual, e_previo = cols[i-1], cols[i-2]
-                        if e_previo in totales and totales[e_previo] != 0:
-                            totales[col] = ((totales[e_actual] / totales[e_previo]) - 1) * 100
-                        if e_previo in promedios and promedios[e_previo] != 0:
-                            promedios[col] = ((promedios[e_actual] / promedios[e_previo]) - 1) * 100
+                # Calculamos Totales y Promedios sobre la matriz original de solo años
+                totales_base = matriz.sum(axis=0, skipna=True)
+                promedios_base = matriz.mean(axis=0, skipna=True)
 
-                matriz_analisis.loc['TOTAL EJERCICIO'] = totales
-                matriz_analisis.loc['PROMEDIO MENSUAL'] = promedios
+                # Creamos las filas de TOTAL y PROMEDIO para la tabla final
+                fila_total = []
+                fila_promedio = []
 
-                # Formatos
+                for i, col_name in enumerate(matriz_analisis.columns):
+                    if "Var %" in col_name:
+                        # Buscamos los ejercicios reales para comparar
+                        idx_ej_actual = ejercicios_disponibles[i // 2] # El ejercicio actual
+                        idx_ej_previo = ejercicios_disponibles[(i // 2) - 1] # El ejercicio anterior
+                        
+                        # Var % para Totales
+                        v_act = totales_base[idx_ej_actual]
+                        v_prev = totales_base[idx_ej_previo]
+                        var_t = ((v_act / v_prev) - 1) * 100 if v_prev and v_prev != 0 else np.nan
+                        fila_total.append(var_t)
+                        
+                        # Var % para Promedios
+                        p_act = promedios_base[idx_ej_actual]
+                        p_prev = promedios_base[idx_ej_previo]
+                        var_p = ((p_act / p_prev) - 1) * 100 if p_prev and p_prev != 0 else np.nan
+                        fila_promedio.append(var_p)
+                    else:
+                        # Es una columna de año, traemos el valor directo
+                        fila_total.append(totales_base[col_name])
+                        fila_promedio.append(promedios_base[col_name])
+
+                matriz_analisis.loc['TOTAL EJERCICIO'] = fila_total
+                matriz_analisis.loc['PROMEDIO MENSUAL'] = fila_promedio
+
+                # Formatos de visualización
                 def format_contable_pct(val):
                     if pd.isna(val) or val == 0: return "-"
                     v = int(round(val))
@@ -168,14 +186,13 @@ if data_pegada:
                 styler = matriz_analisis.style.apply(
                     lambda s: ['font-weight: bold; background-color: #e8f4f8' if s.name == 'TOTAL EJERCICIO' else '' for _ in s], axis=1
                 ).apply(
-                    lambda s: ['font-style: italic; background-color: #f9f9f9' if s.name == 'PROMEDIO MENSUAL' else '' for _ in s], axis=1
+                    lambda s: ['font-style: italic; background-color: #f9f9f9' if s.name == 'PROMEDIO MENSUAL' else '' for _2 in s], axis=1
                 )
                 columnas_var = [c for c in matriz_analisis.columns if "Var %" in c]
                 styler = styler.map(color_variacion, subset=columnas_var)
                 formatos_pantalla = {col: (format_contable_pct if "Var %" in col else format_valor) for col in matriz_analisis.columns}
                 st.dataframe(styler.format(formatos_pantalla), use_container_width=True, height=550)
 
-                # Boton Excel
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     matriz_analisis.to_excel(writer, sheet_name='Reporte_Ventas')
