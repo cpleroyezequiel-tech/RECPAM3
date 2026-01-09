@@ -6,7 +6,7 @@ import numpy as np
 # 1. CONFIGURACION DE PAGINA
 st.set_page_config(page_title="Reporte Gestion Contable", layout="wide")
 
-st.title("📊 Análisis de Ventas con Variación Real")
+st.title("📊 Análisis de Ventas AXI con Variación Real")
 st.markdown("""
 **Instrucciones:**
 1. Defina el **Mes de Inicio** de su ejercicio.
