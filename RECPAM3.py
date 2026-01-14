@@ -53,7 +53,7 @@ if data_pegada:
     if len(raw_input) < 6:
         st.warning("Por favor, complete el periodo con 6 dígitos (ejemplo: 202412).")
     elif mes_destino_input not in indices_base:
-        st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2025/11.")
+        st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2025/12.")
     else:
         try:
             df = pd.read_csv(io.StringIO(data_pegada), sep='\t')
