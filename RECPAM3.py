@@ -8,19 +8,18 @@ st.set_page_config(page_title="Reporte Gestion Contable", layout="wide")
 
 st.title("📊 Análisis de Ventas AXI con Variación Real")
 
-# MODIFICACIÓN 1: Actualización de Instrucciones
+# MODIFICACIÓN 1: Instrucciones dinámicas
 st.markdown("""
 **Instrucciones:**
 1. Indique desde **qué sistema** va a pegar la información (Pitágoras / SIPF).
 2. Defina el **Mes de Inicio** de su ejercicio.
 3. Ingrese el **Periodo de Cierre** (formato AAAAMM, ej: 202412).
-4. Copie las 3 columnas de su Excel (**Periodo, Compras, Ventas**) y péguelas abajo.
+4. Copie la información de su Excel y péguela abajo.
 """)
 
 st.divider()
 
 # 2. SELECTORES
-# MODIFICACIÓN 2: Selección de Sistema antes del Mes de Inicio
 sistema_origen = st.radio(
     "1. Indique desde qué sistema va a pegar la información:",
     ["Pitágoras", "SIPF"],
@@ -29,9 +28,10 @@ sistema_origen = st.radio(
 
 col_conf1, col_conf2 = st.columns(2)
 
+meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+                 "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
 with col_conf1:
-    meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
-                     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     mes_inicio_nombre = st.selectbox("2. Mes de INICIO del ejercicio:", meses_nombres, index=0)
     mes_inicio_num = meses_nombres.index(mes_inicio_nombre) + 1
 
@@ -60,7 +60,14 @@ indices_base = {
 
 st.divider()
 
-data_pegada = st.text_area("4. Pegue las 3 columnas aquí (Año-Mes, Compras, Ventas):", height=200)
+# Etiqueta de ayuda según sistema
+ayuda_pegado = (
+    "4. Pegue las 3 columnas de Pitágoras (Periodo, Compras, Ventas):" 
+    if sistema_origen == "Pitágoras" else 
+    "4. Pegue la tabla completa de SIPF (Mes, Años, Var%):"
+)
+
+data_pegada = st.text_area(ayuda_pegado, height=200)
 
 if data_pegada:
     if len(raw_input) < 6:
@@ -69,40 +76,50 @@ if data_pegada:
         st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2025/12.")
     else:
         try:
-            df = pd.read_csv(io.StringIO(data_pegada), sep='\t')
-            df.columns = ['Periodo_Raw', 'Compras_H', 'Venta_H_Raw']
-            
-            def normalizar_periodo(val):
-                val = str(val).strip()
-                if '/' in val:
-                    partes = val.split('/')
-                    return f"{partes[0]}/{partes[1].zfill(2)}"
-                return val
+            # --- PROCESAMIENTO SEGÚN SISTEMA ---
+            if sistema_origen == "Pitágoras":
+                df = pd.read_csv(io.StringIO(data_pegada), sep='\t')
+                df.columns = ['Periodo_Raw', 'Compras_H', 'Venta_H_Raw']
+                
+                def normalizar_periodo(val):
+                    val = str(val).strip()
+                    if '/' in val:
+                        partes = val.split('/')
+                        return f"{partes[0]}/{partes[1].zfill(2)}"
+                    return val
+                df['Periodo'] = df['Periodo_Raw'].apply(normalizar_periodo)
 
-            df['Periodo'] = df['Periodo_Raw'].apply(normalizar_periodo)
+            else:  # Lógica para SIPF
+                df_raw = pd.read_csv(io.StringIO(data_pegada), sep='\t')
+                # 1. Filtrar solo filas de meses reales (quitar Totales y Promedios)
+                df_raw = df_raw[df_raw.iloc[:, 0].isin(meses_nombres)].copy()
+                
+                # 2. Identificar columnas de años (son las que tienen 4 dígitos numéricos)
+                cols_años = [c for c in df_raw.columns if str(c).isdigit() and len(str(c)) == 4]
+                
+                # 3. Reestructurar tabla (Melt) para que quede vertical
+                df_melted = df_raw.melt(id_vars=[df_raw.columns[0]], value_vars=cols_años, 
+                                        var_name='Año', value_name='Venta_H_Raw')
+                
+                # 4. Crear columna Periodo compatible (YYYY/MM)
+                dict_meses = {nombre: f"{i+1:02d}" for i, nombre in enumerate(meses_nombres)}
+                df_melted['Mes_Num'] = df_melted.iloc[:, 0].map(dict_meses)
+                df_melted['Periodo'] = df_melted['Año'].astype(str) + "/" + df_melted['Mes_Num']
+                
+                df = df_melted[['Periodo', 'Venta_H_Raw']].copy()
 
+            # --- LIMPIEZA Y CÁLCULO DE AXI (Común para ambos) ---
             def limpiar_monto(val):
                 val = str(val).strip().upper()
-                if val in ["S/D", "NAN", ""]: return np.nan
-                val = val.replace('$', '').replace(' ', '')
-                if '.' in val and ',' in val:
-                    if val.rfind('.') < val.rfind(','):
-                        val = val.replace('.', '').replace(',', '.')
-                    else:
-                        val = val.replace(',', '')
-                elif ',' in val:
-                    if val.count(',') > 1 or len(val.split(',')[-1]) == 3:
-                        val = val.replace(',', '')
-                    else:
-                        val = val.replace(',', '.')
-                elif '.' in val:
-                    if val.count('.') > 1 or len(val.split('.')[-1]) == 3:
-                        val = val.replace('.', '')
+                if val in ["S/D", "NAN", "", "0"]: return np.nan
+                val = val.replace('$', '').replace(' ', '').replace('.', '') # Quitar miles
+                val = val.replace(',', '.') # Convertir decimal si existe
                 try: return float(val)
                 except: return np.nan
 
             df['Venta_H'] = df['Venta_H_Raw'].apply(limpiar_monto)
 
+            # Filtrar periodos válidos según el cierre elegido
             lista_periodos = sorted(list(indices_base.keys()))
             idx_corte = lista_periodos.index(mes_destino_input)
             periodos_validos = lista_periodos[:idx_corte + 1]
@@ -110,11 +127,13 @@ if data_pegada:
 
             if not df.empty:
                 ind_dest = indices_base[mes_destino_input]
+                # Aplicar Coeficiente de Inflación
                 df['Venta_R'] = df.apply(
                     lambda row: row['Venta_H'] * (ind_dest / indices_base[row['Periodo']]) 
                     if pd.notnull(row['Venta_H']) and row['Periodo'] in indices_base else np.nan, 
                     axis=1
                 )
+                
                 df['Fecha'] = pd.to_datetime(df['Periodo'], format='%Y/%m')
                 
                 def calcular_nombre_ejercicio(row):
@@ -125,6 +144,7 @@ if data_pegada:
                 df['Ejercicio'] = df['Fecha'].apply(calcular_nombre_ejercicio)
                 df['Mes_Etiqueta'] = df['Fecha'].apply(lambda row: f"{row.month:02d}. {meses_nombres[row.month-1]}")
 
+                # Armado de Matriz de Salida
                 orden_meses = []
                 for i in range(12):
                     m = (mes_inicio_num + i - 1) % 12
@@ -134,6 +154,7 @@ if data_pegada:
                                         aggfunc=lambda x: x.sum(min_count=1), dropna=False)
                 matriz = matriz.reindex(orden_meses)
 
+                # Intercalar columnas Var%
                 ejercicios_disponibles = sorted(matriz.columns)
                 matriz_analisis = pd.DataFrame(index=matriz.index)
 
@@ -144,6 +165,7 @@ if data_pegada:
                         nombre_var = "Var %" + (" " * i) 
                         matriz_analisis[nombre_var] = ((matriz[ej_actual] / matriz[ej_previo]) - 1) * 100
 
+                # Totales y Promedios finales
                 totales_base = matriz.sum(axis=0, skipna=True)
                 promedios_base = matriz.mean(axis=0, skipna=True)
 
@@ -154,14 +176,10 @@ if data_pegada:
                     if "Var %" in col_name:
                         idx_ej_actual = ejercicios_disponibles[i // 2]
                         idx_ej_previo = ejercicios_disponibles[(i // 2) - 1]
-                        
-                        v_act = totales_base[idx_ej_actual]
-                        v_prev = totales_base[idx_ej_previo]
+                        v_act, v_prev = totales_base[idx_ej_actual], totales_base[idx_ej_previo]
                         var_t = ((v_act / v_prev) - 1) * 100 if v_prev and v_prev != 0 else np.nan
                         fila_total.append(var_t)
-                        
-                        p_act = promedios_base[idx_ej_actual]
-                        p_prev = promedios_base[idx_ej_previo]
+                        p_act, p_prev = promedios_base[idx_ej_actual], promedios_base[idx_ej_previo]
                         var_p = ((p_act / p_prev) - 1) * 100 if p_prev and p_prev != 0 else np.nan
                         fila_promedio.append(var_p)
                     else:
@@ -171,6 +189,7 @@ if data_pegada:
                 matriz_analisis.loc['TOTAL EJERCICIO'] = fila_total
                 matriz_analisis.loc['PROMEDIO MENSUAL'] = fila_promedio
 
+                # Formateo y Visualización
                 def format_contable_pct(val):
                     if pd.isna(val) or val == 0: return "-"
                     v = int(round(val))
@@ -186,23 +205,26 @@ if data_pegada:
                     if val > 0.001: return 'color: green; font-weight: bold'
                     return ''
 
-                st.subheader(f"✅ Cuadro Comparativo (Moneda de Cierre: {mes_destino_input})")
+                st.subheader(f"✅ Cuadro Comparativo AXI (Origen: {sistema_origen})")
                 styler = matriz_analisis.style.apply(
                     lambda s: ['font-weight: bold; background-color: #e8f4f8' if s.name == 'TOTAL EJERCICIO' else '' for _ in s], axis=1
                 ).apply(
                     lambda s: ['font-style: italic; background-color: #f9f9f9' if s.name == 'PROMEDIO MENSUAL' else '' for _2 in s], axis=1
                 )
+                
                 columnas_var = [c for c in matriz_analisis.columns if "Var %" in c]
                 styler = styler.map(color_variacion, subset=columnas_var)
                 formatos_pantalla = {col: (format_contable_pct if "Var %" in col else format_valor) for col in matriz_analisis.columns}
+                
                 st.dataframe(styler.format(formatos_pantalla), use_container_width=True, height=550)
 
+                # Botón de Descarga
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    matriz_analisis.to_excel(writer, sheet_name='Reporte_Ventas')
+                    matriz_analisis.to_excel(writer, sheet_name='Reporte_Ventas_AXI')
                 st.download_button(label="📥 Descargar Reporte en Excel", data=output.getvalue(), 
-                                   file_name=f"Analisis_Ventas_{mes_destino_input.replace('/','-')}.xlsx",
+                                   file_name=f"Analisis_Ventas_{sistema_origen}_{mes_destino_input.replace('/','-')}.xlsx",
                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
         except Exception as e:
-            st.error(f"Error al procesar: {e}")
+            st.error(f"Error al procesar los datos de {sistema_origen}. Asegúrese de haber copiado las columnas correctamente. Detalle: {e}")
