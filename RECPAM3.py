@@ -7,14 +7,42 @@ import numpy as np
 st.set_page_config(page_title="Reporte Gestion Contable", layout="wide")
 
 st.title("📊 Análisis de Ventas AXI con Variación Real")
+
+# MODIFICACIÓN 1: Actualización de Instrucciones
 st.markdown("""
 **Instrucciones:**
-1. Defina el **Mes de Inicio** de su ejercicio.
-2. Ingrese el **Periodo de Cierre** (formato AAAAMM, ej: 202412).
-3. Copie las 3 columnas de su Excel (**Periodo, Compras, Ventas**) y péguelas abajo.
+1. Indique desde **qué sistema** va a pegar la información (Pitágoras / SIPF).
+2. Defina el **Mes de Inicio** de su ejercicio.
+3. Ingrese el **Periodo de Cierre** (formato AAAAMM, ej: 202412).
+4. Copie las 3 columnas de su Excel (**Periodo, Compras, Ventas**) y péguelas abajo.
 """)
 
-# 2. BASE DE INDICES (2022 - 2025)
+st.divider()
+
+# 2. SELECTORES
+# MODIFICACIÓN 2: Selección de Sistema antes del Mes de Inicio
+sistema_origen = st.radio(
+    "1. Indique desde qué sistema va a pegar la información:",
+    ["Pitágoras", "SIPF"],
+    horizontal=True
+)
+
+col_conf1, col_conf2 = st.columns(2)
+
+with col_conf1:
+    meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+                     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    mes_inicio_nombre = st.selectbox("2. Mes de INICIO del ejercicio:", meses_nombres, index=0)
+    mes_inicio_num = meses_nombres.index(mes_inicio_nombre) + 1
+
+with col_conf2:
+    raw_input = st.text_input("3. Reexpresar a moneda de (AAAAMM):", value="202412", max_chars=6)
+    if len(raw_input) == 6 and raw_input.isdigit():
+        mes_destino_input = f"{raw_input[:4]}/{raw_input[4:]}"
+    else:
+        mes_destino_input = raw_input
+
+# 3. BASE DE INDICES (2022 - 2025)
 indices_base = {
     "2022/01": 605.0317, "2022/02": 633.4341, "2022/03": 676.0566, "2022/04": 716.9399,
     "2022/05": 753.1470, "2022/06": 793.0278, "2022/07": 851.7610, "2022/08": 911.1316,
@@ -30,24 +58,9 @@ indices_base = {
     "2025/09": 9384.0922, "2025/10": 9603.8623, "2025/11": 9841.3581, "2025/12": 10121.3715
 }
 
-# 3. SELECTORES
-col_conf1, col_conf2 = st.columns(2)
-with col_conf1:
-    meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
-                     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-    mes_inicio_nombre = st.selectbox("Mes de INICIO del ejercicio:", meses_nombres, index=0)
-    mes_inicio_num = meses_nombres.index(mes_inicio_nombre) + 1
-
-with col_conf2:
-    raw_input = st.text_input("Reexpresar a moneda de (AAAAMM):", value="202412", max_chars=6)
-    if len(raw_input) == 6 and raw_input.isdigit():
-        mes_destino_input = f"{raw_input[:4]}/{raw_input[4:]}"
-    else:
-        mes_destino_input = raw_input
-
 st.divider()
 
-data_pegada = st.text_area("Pegue las 3 columnas aquí (Año-Mes, Compras, Ventas):", height=200)
+data_pegada = st.text_area("4. Pegue las 3 columnas aquí (Año-Mes, Compras, Ventas):", height=200)
 
 if data_pegada:
     if len(raw_input) < 6:
@@ -117,7 +130,6 @@ if data_pegada:
                     m = (mes_inicio_num + i - 1) % 12
                     orden_meses.append(f"{m+1:02d}. {meses_nombres[m]}")
 
-                # Creamos la matriz base solo con los años
                 matriz = df.pivot_table(index='Mes_Etiqueta', columns='Ejercicio', values='Venta_R', 
                                         aggfunc=lambda x: x.sum(min_count=1), dropna=False)
                 matriz = matriz.reindex(orden_meses)
@@ -125,7 +137,6 @@ if data_pegada:
                 ejercicios_disponibles = sorted(matriz.columns)
                 matriz_analisis = pd.DataFrame(index=matriz.index)
 
-                # Construimos la tabla final intercalando Var%
                 for i, ej_actual in enumerate(ejercicios_disponibles):
                     matriz_analisis[ej_actual] = matriz[ej_actual]
                     if i > 0:
@@ -133,40 +144,33 @@ if data_pegada:
                         nombre_var = "Var %" + (" " * i) 
                         matriz_analisis[nombre_var] = ((matriz[ej_actual] / matriz[ej_previo]) - 1) * 100
 
-                # Calculamos Totales y Promedios sobre la matriz original de solo años
                 totales_base = matriz.sum(axis=0, skipna=True)
                 promedios_base = matriz.mean(axis=0, skipna=True)
 
-                # Creamos las filas de TOTAL y PROMEDIO para la tabla final
                 fila_total = []
                 fila_promedio = []
 
                 for i, col_name in enumerate(matriz_analisis.columns):
                     if "Var %" in col_name:
-                        # Buscamos los ejercicios reales para comparar
-                        idx_ej_actual = ejercicios_disponibles[i // 2] # El ejercicio actual
-                        idx_ej_previo = ejercicios_disponibles[(i // 2) - 1] # El ejercicio anterior
+                        idx_ej_actual = ejercicios_disponibles[i // 2]
+                        idx_ej_previo = ejercicios_disponibles[(i // 2) - 1]
                         
-                        # Var % para Totales
                         v_act = totales_base[idx_ej_actual]
                         v_prev = totales_base[idx_ej_previo]
                         var_t = ((v_act / v_prev) - 1) * 100 if v_prev and v_prev != 0 else np.nan
                         fila_total.append(var_t)
                         
-                        # Var % para Promedios
                         p_act = promedios_base[idx_ej_actual]
                         p_prev = promedios_base[idx_ej_previo]
                         var_p = ((p_act / p_prev) - 1) * 100 if p_prev and p_prev != 0 else np.nan
                         fila_promedio.append(var_p)
                     else:
-                        # Es una columna de año, traemos el valor directo
                         fila_total.append(totales_base[col_name])
                         fila_promedio.append(promedios_base[col_name])
 
                 matriz_analisis.loc['TOTAL EJERCICIO'] = fila_total
                 matriz_analisis.loc['PROMEDIO MENSUAL'] = fila_promedio
 
-                # Formatos de visualización
                 def format_contable_pct(val):
                     if pd.isna(val) or val == 0: return "-"
                     v = int(round(val))
