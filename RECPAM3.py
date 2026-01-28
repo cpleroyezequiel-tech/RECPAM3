@@ -7,6 +7,7 @@ import numpy as np
 st.set_page_config(page_title="Reporte Gestion Contable", layout="wide")
 
 st.title("📊 Análisis de Ventas AXI con Variación Real")
+st.caption("Desarrollado por Ezequiel Leroy") # <--- Línea agregada
 
 # MODIFICACIÓN 1: Instrucciones dinámicas
 st.markdown("""
@@ -60,7 +61,6 @@ indices_base = {
 
 st.divider()
 
-# Etiqueta de ayuda según sistema
 ayuda_pegado = (
     "4. Pegue las 3 columnas de Pitágoras (Periodo, Compras, Ventas):" 
     if sistema_origen == "Pitágoras" else 
@@ -76,7 +76,6 @@ if data_pegada:
         st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2025/12.")
     else:
         try:
-            # --- PROCESAMIENTO SEGÚN SISTEMA ---
             if sistema_origen == "Pitágoras":
                 df = pd.read_csv(io.StringIO(data_pegada), sep='\t')
                 df.columns = ['Periodo_Raw', 'Compras_H', 'Venta_H_Raw']
@@ -89,7 +88,7 @@ if data_pegada:
                     return val
                 df['Periodo'] = df['Periodo_Raw'].apply(normalizar_periodo)
 
-            else:  # Lógica para SIPF
+            else:
                 df_raw = pd.read_csv(io.StringIO(data_pegada), sep='\t')
                 df_raw = df_raw[df_raw.iloc[:, 0].isin(meses_nombres)].copy()
                 cols_años = [c for c in df_raw.columns if str(c).isdigit() and len(str(c)) == 4]
@@ -100,7 +99,6 @@ if data_pegada:
                 df_melted['Periodo'] = df_melted['Año'].astype(str) + "/" + df_melted['Mes_Num']
                 df = df_melted[['Periodo', 'Venta_H_Raw']].copy()
 
-            # --- FUNCIÓN DE LIMPIEZA ROBUSTA ---
             def limpiar_monto(val):
                 val = str(val).strip().upper()
                 if val in ["S/D", "NAN", "", "0"]: return np.nan
@@ -127,7 +125,6 @@ if data_pegada:
 
             df['Venta_H'] = df['Venta_H_Raw'].apply(limpiar_monto)
 
-            # Filtrar periodos válidos
             lista_periodos = sorted(list(indices_base.keys()))
             idx_corte = lista_periodos.index(mes_destino_input)
             periodos_validos = lista_periodos[:idx_corte + 1]
@@ -151,7 +148,6 @@ if data_pegada:
                 df['Ejercicio'] = df['Fecha'].apply(calcular_nombre_ejercicio)
                 df['Mes_Etiqueta'] = df['Fecha'].apply(lambda row: f"{row.month:02d}. {meses_nombres[row.month-1]}")
 
-                # Matriz de Salida
                 orden_meses = []
                 for i in range(12):
                     m = (mes_inicio_num + i - 1) % 12
@@ -194,7 +190,6 @@ if data_pegada:
                 matriz_analisis.loc['TOTAL EJERCICIO'] = fila_total
                 matriz_analisis.loc['PROMEDIO MENSUAL'] = fila_promedio
 
-                # Formateo
                 def format_contable_pct(val):
                     if pd.isna(val) or val == 0: return "-"
                     v = int(round(val))
@@ -210,7 +205,6 @@ if data_pegada:
                     if val > 0.001: return 'color: green; font-weight: bold'
                     return ''
 
-                # MODIFICACIÓN SOLICITADA: Título dinámico con Periodo y Origen
                 st.subheader(f"✅ Cuadro Comparativo AXI al {mes_destino_input} (Origen: {sistema_origen})")
                 
                 styler = matriz_analisis.style.apply(
