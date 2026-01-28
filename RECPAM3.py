@@ -100,35 +100,26 @@ if data_pegada:
                 df_melted['Periodo'] = df_melted['Año'].astype(str) + "/" + df_melted['Mes_Num']
                 df = df_melted[['Periodo', 'Venta_H_Raw']].copy()
 
-            # --- NUEVA FUNCIÓN DE LIMPIEZA ROBUSTA ---
+            # --- FUNCIÓN DE LIMPIEZA ROBUSTA ---
             def limpiar_monto(val):
                 val = str(val).strip().upper()
                 if val in ["S/D", "NAN", "", "0"]: return np.nan
-                
-                # Quitar símbolos monetarios y espacios
                 val = val.replace('$', '').replace(' ', '')
-                
-                # Lógica para manejar tanto "." como "," de miles
                 if ',' in val and '.' in val:
-                    # Caso: 1.234,56 o 1,234.56 -> El último es el decimal
                     if val.rfind(',') > val.rfind('.'):
                         val = val.replace('.', '').replace(',', '.')
                     else:
                         val = val.replace(',', '')
                 elif ',' in val:
-                    # Caso: 1,000,000 o 1000,50
                     partes = val.split(',')
-                    # Si hay varias comas o la última parte tiene 3 dígitos, es separador de miles
                     if len(partes) > 2 or len(partes[-1]) == 3:
                         val = val.replace(',', '')
                     else:
                         val = val.replace(',', '.')
                 elif '.' in val:
-                    # Caso: 1.000.000 o 1000.50
                     partes = val.split('.')
                     if len(partes) > 2 or len(partes[-1]) == 3:
                         val = val.replace('.', '')
-                
                 try: 
                     return float(val)
                 except: 
@@ -219,7 +210,9 @@ if data_pegada:
                     if val > 0.001: return 'color: green; font-weight: bold'
                     return ''
 
-                st.subheader(f"✅ Cuadro Comparativo AXI (Origen: {sistema_origen})")
+                # MODIFICACIÓN SOLICITADA: Título dinámico con Periodo y Origen
+                st.subheader(f"✅ Cuadro Comparativo AXI al {mes_destino_input} (Origen: {sistema_origen})")
+                
                 styler = matriz_analisis.style.apply(
                     lambda s: ['font-weight: bold; background-color: #e8f4f8' if s.name == 'TOTAL EJERCICIO' else '' for _ in s], axis=1
                 ).apply(
