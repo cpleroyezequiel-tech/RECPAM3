@@ -91,35 +91,52 @@ if data_pegada:
 
             else:  # Lógica para SIPF
                 df_raw = pd.read_csv(io.StringIO(data_pegada), sep='\t')
-                # 1. Filtrar solo filas de meses reales (quitar Totales y Promedios)
                 df_raw = df_raw[df_raw.iloc[:, 0].isin(meses_nombres)].copy()
-                
-                # 2. Identificar columnas de años (son las que tienen 4 dígitos numéricos)
                 cols_años = [c for c in df_raw.columns if str(c).isdigit() and len(str(c)) == 4]
-                
-                # 3. Reestructurar tabla (Melt) para que quede vertical
                 df_melted = df_raw.melt(id_vars=[df_raw.columns[0]], value_vars=cols_años, 
                                         var_name='Año', value_name='Venta_H_Raw')
-                
-                # 4. Crear columna Periodo compatible (YYYY/MM)
                 dict_meses = {nombre: f"{i+1:02d}" for i, nombre in enumerate(meses_nombres)}
                 df_melted['Mes_Num'] = df_melted.iloc[:, 0].map(dict_meses)
                 df_melted['Periodo'] = df_melted['Año'].astype(str) + "/" + df_melted['Mes_Num']
-                
                 df = df_melted[['Periodo', 'Venta_H_Raw']].copy()
 
-            # --- LIMPIEZA Y CÁLCULO DE AXI (Común para ambos) ---
+            # --- NUEVA FUNCIÓN DE LIMPIEZA ROBUSTA ---
             def limpiar_monto(val):
                 val = str(val).strip().upper()
                 if val in ["S/D", "NAN", "", "0"]: return np.nan
-                val = val.replace('$', '').replace(' ', '').replace('.', '') # Quitar miles
-                val = val.replace(',', '.') # Convertir decimal si existe
-                try: return float(val)
-                except: return np.nan
+                
+                # Quitar símbolos monetarios y espacios
+                val = val.replace('$', '').replace(' ', '')
+                
+                # Lógica para manejar tanto "." como "," de miles
+                if ',' in val and '.' in val:
+                    # Caso: 1.234,56 o 1,234.56 -> El último es el decimal
+                    if val.rfind(',') > val.rfind('.'):
+                        val = val.replace('.', '').replace(',', '.')
+                    else:
+                        val = val.replace(',', '')
+                elif ',' in val:
+                    # Caso: 1,000,000 o 1000,50
+                    partes = val.split(',')
+                    # Si hay varias comas o la última parte tiene 3 dígitos, es separador de miles
+                    if len(partes) > 2 or len(partes[-1]) == 3:
+                        val = val.replace(',', '')
+                    else:
+                        val = val.replace(',', '.')
+                elif '.' in val:
+                    # Caso: 1.000.000 o 1000.50
+                    partes = val.split('.')
+                    if len(partes) > 2 or len(partes[-1]) == 3:
+                        val = val.replace('.', '')
+                
+                try: 
+                    return float(val)
+                except: 
+                    return np.nan
 
             df['Venta_H'] = df['Venta_H_Raw'].apply(limpiar_monto)
 
-            # Filtrar periodos válidos según el cierre elegido
+            # Filtrar periodos válidos
             lista_periodos = sorted(list(indices_base.keys()))
             idx_corte = lista_periodos.index(mes_destino_input)
             periodos_validos = lista_periodos[:idx_corte + 1]
@@ -127,7 +144,6 @@ if data_pegada:
 
             if not df.empty:
                 ind_dest = indices_base[mes_destino_input]
-                # Aplicar Coeficiente de Inflación
                 df['Venta_R'] = df.apply(
                     lambda row: row['Venta_H'] * (ind_dest / indices_base[row['Periodo']]) 
                     if pd.notnull(row['Venta_H']) and row['Periodo'] in indices_base else np.nan, 
@@ -144,7 +160,7 @@ if data_pegada:
                 df['Ejercicio'] = df['Fecha'].apply(calcular_nombre_ejercicio)
                 df['Mes_Etiqueta'] = df['Fecha'].apply(lambda row: f"{row.month:02d}. {meses_nombres[row.month-1]}")
 
-                # Armado de Matriz de Salida
+                # Matriz de Salida
                 orden_meses = []
                 for i in range(12):
                     m = (mes_inicio_num + i - 1) % 12
@@ -154,7 +170,6 @@ if data_pegada:
                                         aggfunc=lambda x: x.sum(min_count=1), dropna=False)
                 matriz = matriz.reindex(orden_meses)
 
-                # Intercalar columnas Var%
                 ejercicios_disponibles = sorted(matriz.columns)
                 matriz_analisis = pd.DataFrame(index=matriz.index)
 
@@ -165,7 +180,6 @@ if data_pegada:
                         nombre_var = "Var %" + (" " * i) 
                         matriz_analisis[nombre_var] = ((matriz[ej_actual] / matriz[ej_previo]) - 1) * 100
 
-                # Totales y Promedios finales
                 totales_base = matriz.sum(axis=0, skipna=True)
                 promedios_base = matriz.mean(axis=0, skipna=True)
 
@@ -189,7 +203,7 @@ if data_pegada:
                 matriz_analisis.loc['TOTAL EJERCICIO'] = fila_total
                 matriz_analisis.loc['PROMEDIO MENSUAL'] = fila_promedio
 
-                # Formateo y Visualización
+                # Formateo
                 def format_contable_pct(val):
                     if pd.isna(val) or val == 0: return "-"
                     v = int(round(val))
@@ -218,7 +232,6 @@ if data_pegada:
                 
                 st.dataframe(styler.format(formatos_pantalla), use_container_width=True, height=550)
 
-                # Botón de Descarga
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     matriz_analisis.to_excel(writer, sheet_name='Reporte_Ventas_AXI')
@@ -227,4 +240,4 @@ if data_pegada:
                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
         except Exception as e:
-            st.error(f"Error al procesar los datos de {sistema_origen}. Asegúrese de haber copiado las columnas correctamente. Detalle: {e}")
+            st.error(f"Error al procesar los datos de {sistema_origen}. Detalle: {e}")
