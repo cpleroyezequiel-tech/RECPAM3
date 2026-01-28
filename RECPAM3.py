@@ -12,7 +12,7 @@ st.caption("Desarrollado por Ezequiel Leroy") # <--- Línea agregada
 # MODIFICACIÓN 1: Instrucciones dinámicas
 st.markdown("""
 **Instrucciones:**
-1. Indique desde **qué sistema** va a pegar la información (Pitágoras / SIPF).
+1. Indique desde **qué sistema** va a pegar la información (Pitágoras / SIPF). En caso de SIPF descargue la información de "Evolución de ventas totales, locales y al exterior".
 2. Defina el **Mes de Inicio** de su ejercicio.
 3. Ingrese el **Periodo de Cierre** (formato AAAAMM, ej: 202412).
 4. Copie la información de su Excel y péguela abajo.
