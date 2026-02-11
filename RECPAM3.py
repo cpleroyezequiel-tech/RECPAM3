@@ -43,7 +43,7 @@ with col_conf2:
     else:
         mes_destino_input = raw_input
 
-# 3. BASE DE INDICES (2022 - 2025)
+# 3. BASE DE INDICES (2022 - 2026)
 indices_base = {
     "2022/01": 605.0317, "2022/02": 633.4341, "2022/03": 676.0566, "2022/04": 716.9399,
     "2022/05": 753.1470, "2022/06": 793.0278, "2022/07": 851.7610, "2022/08": 911.1316,
@@ -71,9 +71,9 @@ data_pegada = st.text_area(ayuda_pegado, height=200)
 
 if data_pegada:
     if len(raw_input) < 6:
-        st.warning("Por favor, complete el periodo con 6 dígitos (ejemplo: 202512).")
+        st.warning("Por favor, complete el periodo con 6 dígitos (ejemplo: 202601).")
     elif mes_destino_input not in indices_base:
-        st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2025/12.")
+        st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2026/01.")
     else:
         try:
             if sistema_origen == "Pitágoras":
