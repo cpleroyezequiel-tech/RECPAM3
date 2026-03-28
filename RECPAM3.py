@@ -14,7 +14,7 @@ st.markdown("""
 **Instrucciones:**
 1. Indique desde **qué sistema** va a pegar la información (Pitágoras / SIPF). En caso de SIPF descargue la información de "Evolución de ventas totales, locales y al exterior".
 2. Defina el **Mes de Inicio** de su ejercicio.
-3. Ingrese el **Periodo de Cierre** (formato AAAAMM, ej: 202601).
+3. Ingrese el **Periodo de Cierre** (formato AAAAMM, ej: 202602).
 4. Copie la información de su Excel y péguela abajo.
 """)
 
@@ -37,7 +37,7 @@ with col_conf1:
     mes_inicio_num = meses_nombres.index(mes_inicio_nombre) + 1
 
 with col_conf2:
-    raw_input = st.text_input("3. Reexpresar a moneda de (AAAAMM):", value="202601", max_chars=6)
+    raw_input = st.text_input("3. Reexpresar a moneda de (AAAAMM):", value="202602", max_chars=6)
     if len(raw_input) == 6 and raw_input.isdigit():
         mes_destino_input = f"{raw_input[:4]}/{raw_input[4:]}"
     else:
