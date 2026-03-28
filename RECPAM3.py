@@ -56,7 +56,7 @@ indices_base = {
     "2024/09": 7122.2421, "2024/10": 7313.9542, "2024/11": 7491.4314, "2024/12": 7694.0075,
     "2025/01": 7864.1257, "2025/02": 8052.9927, "2025/03": 8353.3125, "2025/04": 8585.6078,
     "2025/05": 8714.4871, "2025/06": 8855.5681, "2025/07": 9023.9730, "2025/08": 9193.2441,
-    "2025/09": 9384.0922, "2025/10": 9603.8623, "2025/11": 9841.3581, "2025/12": 10121.3715, "2026/01": 10413.0309
+    "2025/09": 9384.0922, "2025/10": 9603.8623, "2025/11": 9841.3581, "2025/12": 10121.3715, "2026/01": 10413.0309, "2026/02": 10714.6255
 }
 
 st.divider()
@@ -71,9 +71,9 @@ data_pegada = st.text_area(ayuda_pegado, height=200)
 
 if data_pegada:
     if len(raw_input) < 6:
-        st.warning("Por favor, complete el periodo con 6 dígitos (ejemplo: 202601).")
+        st.warning("Por favor, complete el periodo con 6 dígitos (ejemplo: 202602).")
     elif mes_destino_input not in indices_base:
-        st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2026/01.")
+        st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2026/02.")
     else:
         try:
             if sistema_origen == "Pitágoras":
