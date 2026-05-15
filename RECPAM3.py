@@ -14,7 +14,7 @@ st.markdown("""
 **Instrucciones:**
 1. Indique desde **qué sistema** va a pegar la información (Pitágoras / SIPF). En caso de SIPF descargue la información de "Evolución de ventas totales, locales y al exterior".
 2. Defina el **Mes de Inicio** de su ejercicio.
-3. Ingrese el **Periodo de Cierre** (formato AAAAMM, ej: 202603).
+3. Ingrese el **Periodo de Cierre** (formato AAAAMM, ej: 202604).
 4. Copie la información de su Excel y péguela abajo.
 """)
 
@@ -37,7 +37,7 @@ with col_conf1:
     mes_inicio_num = meses_nombres.index(mes_inicio_nombre) + 1
 
 with col_conf2:
-    raw_input = st.text_input("3. Reexpresar a moneda de (AAAAMM):", value="202603", max_chars=6)
+    raw_input = st.text_input("3. Reexpresar a moneda de (AAAAMM):", value="202604", max_chars=6)
     if len(raw_input) == 6 and raw_input.isdigit():
         mes_destino_input = f"{raw_input[:4]}/{raw_input[4:]}"
     else:
@@ -57,7 +57,7 @@ indices_base = {
     "2025/01": 7864.1257, "2025/02": 8052.9927, "2025/03": 8353.3125, "2025/04": 8585.6078,
     "2025/05": 8714.4871, "2025/06": 8855.5681, "2025/07": 9023.9730, "2025/08": 9193.2441,
     "2025/09": 9384.0922, "2025/10": 9603.8623, "2025/11": 9841.3581, "2025/12": 10121.3715, 
-    "2026/01": 10413.0309, "2026/02": 10714.6255, "2026/03": 11077.0608}
+    "2026/01": 10413.0309, "2026/02": 10714.6255, "2026/03": 11077.0608, "2026/04": 11363.0904}
 
 st.divider()
 
@@ -71,7 +71,7 @@ data_pegada = st.text_area(ayuda_pegado, height=200)
 
 if data_pegada:
     if len(raw_input) < 6:
-        st.warning("Por favor, complete el periodo con 6 dígitos (ejemplo: 202602).")
+        st.warning("Por favor, complete el periodo con 6 dígitos (ejemplo: 202604).")
     elif mes_destino_input not in indices_base:
         st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2026/02.")
     else:
