@@ -1,3 +1,4 @@
+Python
 import streamlit as st
 import pandas as pd
 import io
@@ -7,9 +8,9 @@ import numpy as np
 st.set_page_config(page_title="Reporte Gestion Contable", layout="wide")
 
 st.title("📊 Análisis de Ventas AXI con Variación Real")
-st.caption("Desarrollado por Ezequiel Leroy") # <--- Línea agregada
+st.caption("Desarrollado por Ezequiel Leroy")
 
-# MODIFICACIÓN 1: Instrucciones dinámicas
+# Instrucciones dinámicas
 st.markdown("""
 **Instrucciones:**
 1. Indique desde **qué sistema** va a pegar la información (Pitágoras / SIPF). En caso de SIPF descargue la información de "Evolución de ventas totales, locales y al exterior".
@@ -57,7 +58,8 @@ indices_base = {
     "2025/01": 7864.1257, "2025/02": 8052.9927, "2025/03": 8353.3125, "2025/04": 8585.6078,
     "2025/05": 8714.4871, "2025/06": 8855.5681, "2025/07": 9023.9730, "2025/08": 9193.2441,
     "2025/09": 9384.0922, "2025/10": 9603.8623, "2025/11": 9841.3581, "2025/12": 10121.3715, 
-    "2026/01": 10413.0309, "2026/02": 10714.6255, "2026/03": 11077.0608, "2026/04": 11363.0904, "2026/05": 11607.3937}
+    "2026/01": 10413.0309, "2026/02": 10714.6255, "2026/03": 11077.0608, "2026/04": 11363.0904, 
+    "2026/05": 11607.3937}
 
 st.divider()
 
@@ -76,32 +78,10 @@ if data_pegada:
         st.error("⚠️ No se admiten reexpresiones anteriores al 2022/01 o posteriores al 2026/05.")
     else:
         try:
-            if sistema_origen == "Pitágoras":
-                df = pd.read_csv(io.StringIO(data_pegada), sep='\t')
-                df.columns = ['Periodo_Raw', 'Compras_H', 'Venta_H_Raw']
-                
-                def normalizar_periodo(val):
-                    val = str(val).strip()
-                    if '/' in val:
-                        partes = val.split('/')
-                        return f"{partes[0]}/{partes[1].zfill(2)}"
-                    return val
-                df['Periodo'] = df['Periodo_Raw'].apply(normalizar_periodo)
-
-            else:
-                df_raw = pd.read_csv(io.StringIO(data_pegada), sep='\t')
-                df_raw = df_raw[df_raw.iloc[:, 0].isin(meses_nombres)].copy()
-                cols_años = [c for c in df_raw.columns if str(c).isdigit() and len(str(c)) == 4]
-                df_melted = df_raw.melt(id_vars=[df_raw.columns[0]], value_vars=cols_años, 
-                                        var_name='Año', value_name='Venta_H_Raw')
-                dict_meses = {nombre: f"{i+1:02d}" for i, nombre in enumerate(meses_nombres)}
-                df_melted['Mes_Num'] = df_melted.iloc[:, 0].map(dict_meses)
-                df_melted['Periodo'] = df_melted['Año'].astype(str) + "/" + df_melted['Mes_Num']
-                df = df_melted[['Periodo', 'Venta_H_Raw']].copy()
-
+            # LÓGICA DE LIMPIEZA DE MONTOS
             def limpiar_monto(val):
                 val = str(val).strip().upper()
-                if val in ["S/D", "NAN", "", "0"]: return np.nan
+                if val in ["S/D", "NAN", "", "0", "0.0"]: return np.nan
                 val = val.replace('$', '').replace(' ', '')
                 if ',' in val and '.' in val:
                     if val.rfind(',') > val.rfind('.'):
@@ -123,8 +103,47 @@ if data_pegada:
                 except: 
                     return np.nan
 
-            df['Venta_H'] = df['Venta_H_Raw'].apply(limpiar_monto)
+            # PROCESAMIENTO SEGÚN ORIGEN
+            if sistema_origen == "Pitágoras":
+                df = pd.read_csv(io.StringIO(data_pegada), sep='\t')
+                df.columns = ['Periodo_Raw', 'Compras_H', 'Venta_H_Raw']
+                
+                def normalizar_periodo(val):
+                    val = str(val).strip()
+                    if '/' in val:
+                        partes = val.split('/')
+                        return f"{partes[0]}/{partes[1].zfill(2)}"
+                    return val
+                df['Periodo'] = df['Periodo_Raw'].apply(normalizar_periodo)
+                df['Venta_H'] = df['Venta_H_Raw'].apply(limpiar_monto)
 
+            else:
+                # NUEVA LÓGICA DE PROCESAMIENTO PARA SIPF
+                # Lee separando por tabulación o comas (por si acaso)
+                df_raw = pd.read_csv(io.StringIO(data_pegada), sep=None, engine='python')
+                
+                # Limpiamos los nombres de las columnas
+                df_raw.columns = [str(c).strip() for c in df_raw.columns]
+                
+                # Filtramos para quedarnos solo con las filas de meses válidos
+                df_raw = df_raw[df_raw.iloc[:, 0].str.strip().isin(meses_nombres)].copy()
+                df_raw.iloc[:, 0] = df_raw.iloc[:, 0].str.strip()
+                
+                # Identificamos las columnas de años reales (numéricas de 4 dígitos), ignorando las Var(%)
+                cols_años = [c for c in df_raw.columns if c.isdigit() and len(c) == 4]
+                
+                # Desarmamos la matriz transpuesta
+                df_melted = df_raw.melt(id_vars=[df_raw.columns[0]], value_vars=cols_años, 
+                                        var_name='Año', value_name='Venta_H_Raw')
+                
+                dict_meses = {nombre: f"{i+1:02d}" for i, nombre in enumerate(meses_nombres)}
+                df_melted['Mes_Num'] = df_melted.iloc[:, 0].map(dict_meses)
+                df_melted['Periodo'] = df_melted['Año'].astype(str) + "/" + df_melted['Mes_Num']
+                
+                df = df_melted[['Periodo', 'Venta_H_Raw']].copy()
+                df['Venta_H'] = df['Venta_H_Raw'].apply(limpiar_monto)
+
+            # 4. MATEMÁTICA DE AJUSTE POR INFLACIÓN (AXI)
             lista_periodos = sorted(list(indices_base.keys()))
             idx_corte = lista_periodos.index(mes_destino_input)
             periodos_validos = lista_periodos[:idx_corte + 1]
