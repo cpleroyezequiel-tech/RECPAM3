@@ -65,7 +65,7 @@ st.divider()
 ayuda_pegado = (
     "4. Pegue las 3 columnas de Pitágoras (Periodo, Compras, Ventas):" 
     if sistema_origen == "Pitágoras" else 
-    "4. Pegue la tabla completa de SIPF (Mes, Años, Var%):"
+    "4. 4. Pegue la tabla completa de SIPF (Evolución de ventas totales, locales y exterior >> Enero 2022 a Diciembre 2026 >> Importe ARS (sin ajuste por IPC) >> Visualizar reporte >> copia y pegar incluyendo titulos hasta prom vertical):"
 )
 
 data_pegada = st.text_area(ayuda_pegado, height=200)
