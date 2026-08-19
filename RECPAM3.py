@@ -37,7 +37,7 @@ with col_conf1:
     mes_inicio_num = meses_nombres.index(mes_inicio_nombre) + 1
 
 with col_conf2:
-    raw_input = st.text_input("3. Reexpresar a moneda de (AAAAMM):", value="202606", max_chars=6)
+    raw_input = st.text_input("3. Reexpresar a moneda de (AAAAMM):", value="202607", max_chars=6)
     if len(raw_input) == 6 and raw_input.isdigit():
         mes_destino_input = f"{raw_input[:4]}/{raw_input[4:]}"
     else:
